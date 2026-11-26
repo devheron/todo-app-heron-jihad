@@ -8,7 +8,8 @@ const app = express();
 const port = 5000;
 
 // Conexão com o MongoDB (com autenticação)
-mongoose.connect('mongodb://root:rootpassword@mongo-todo:27017/todo-app?authSource=admin', {
+const mongoUri = process.env.MONGO_URI || 'mongodb://root:rootpassword@mongo-todo:27017/todo-app?authSource=admin';
+mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
