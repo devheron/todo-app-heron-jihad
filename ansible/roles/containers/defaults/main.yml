@@ -29,3 +29,12 @@ db_private_ip: "{{ hostvars[groups['db'][0]]['ansible_default_ipv4']['address'] 
 mongo_app_password_url: "{{ mongo_app_password | urlencode | replace('/', '%2F') }}"
 mongo_uri: >-
   mongodb://{{ mongo_app_user }}:{{ mongo_app_password_url }}@{{ db_private_ip }}:27017/{{ mongo_database }}?authSource={{ mongo_database }}
+
+  
+# ---- MongoDB na VM do banco (card 18) ----
+mongo_image: mongo
+mongo_tag: "7.0"                      # tag fixa: atualização do banco é sempre intencional
+mongo_root_user: "{{ lookup('ansible.builtin.env', 'MONGO_ROOT_USERNAME') | default('admin', true) }}"
+mongo_root_password: "{{ lookup('ansible.builtin.env', 'MONGO_ROOT_PASSWORD') }}"
+mongo_volume: todo-mongo-data         # volume nomeado: os dados sobrevivem a recriações do contêiner
+db_config_dir: /opt/todo-db

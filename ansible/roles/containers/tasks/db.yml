@@ -1,0 +1,75 @@
+---
+# Contêiner da VM do banco (card 18)
+# - todo-mongodb: MongoDB com autenticação, dados em volume persistente
+#   e porta 27017 publicada SOMENTE no IP privado da VM (nunca em 0.0.0.0)
+
+- name: Validar que as senhas do banco foram informadas pela pipeline
+  ansible.builtin.assert:
+    that:
+      - mongo_root_password | length > 0
+      - mongo_app_password | length > 0
+    fail_msg: "MONGO_ROOT_PASSWORD e/ou MONGO_APP_PASSWORD não informadas. Configure os GitHub Secrets."
+    quiet: true
+
+- name: Criar diretório do script de inicialização do banco
+  ansible.builtin.file:
+    path: "{{ db_config_dir }}/initdb"
+    state: directory
+    mode: "0755"
+
+- name: Copiar script de inicialização (usuário da aplicação + dados iniciais)
+  ansible.builtin.copy:
+    src: mongo-init.js
+    dest: "{{ db_config_dir }}/initdb/mongo-init.js"
+    mode: "0644"
+
+- name: Criar/atualizar contêiner do MongoDB (todo-mongodb)
+  community.docker.docker_container:
+    name: todo-mongodb
+    image: "{{ mongo_image }}:{{ mongo_tag }}"
+    state: started
+    restart_policy: always
+    published_ports:
+      - "{{ ansible_default_ipv4.address }}:27017:27017"   # só no IP privado
+    volumes:
+      - "{{ mongo_volume }}:/data/db"                      # dados persistentes
+      - "{{ db_config_dir }}/initdb:/docker-entrypoint-initdb.d:ro"
+    env:
+      MONGO_INITDB_ROOT_USERNAME: "{{ mongo_root_user }}"
+      MONGO_INITDB_ROOT_PASSWORD: "{{ mongo_root_password }}"
+      MONGO_INITDB_DATABASE: "{{ mongo_database }}"
+      MONGO_APP_USER: "{{ mongo_app_user }}"
+      MONGO_APP_PASSWORD: "{{ mongo_app_password }}"
+  no_log: true          # as variáveis de ambiente contêm senhas: não exibir no log
+
+- name: Aguardar o MongoDB aceitar conexões no IP privado
+  ansible.builtin.wait_for:
+    host: "{{ ansible_default_ipv4.address }}"
+    port: 27017
+    timeout: 120
+
+- name: Verificar login com o usuário da aplicação
+  community.docker.docker_container_exec:
+    container: todo-mongodb
+    argv:
+      - mongosh
+      - "--quiet"
+      - "--username"
+      - "{{ mongo_app_user }}"
+      - "--password"
+      - "{{ mongo_app_password }}"
+      - "--authenticationDatabase"
+      - "{{ mongo_database }}"
+      - "{{ mongo_database }}"
+      - "--eval"
+      - "db.todos.countDocuments()"
+  register: db_login_check
+  retries: 10
+  delay: 6
+  until: db_login_check.rc == 0
+  changed_when: false
+  no_log: true
+
+- name: Exibir resultado da verificação do banco
+  ansible.builtin.debug:
+    msg: "MongoDB OK: usuário '{{ mongo_app_user }}' autenticado, {{ db_login_check.stdout | trim }} tarefa(s) na coleção todos"
