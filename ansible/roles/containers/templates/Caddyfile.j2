@@ -1,0 +1,11 @@
+# Gerenciado pelo Ansible (role containers) - nao editar manualmente na VM
+# Caddy pede e renova automaticamente o certificado TLS no Let's Encrypt
+# usando o dominio nip.io, que resolve o IP publico do Load Balancer
+
+{
+    email {{ tls_email }}
+}
+
+{{ caddy_domain }} {
+    reverse_proxy todo-frontend:80
+}

@@ -4,10 +4,10 @@ output "lb_public_ip" {
   value       = azurerm_public_ip.lb.ip_address
 }
 
-// URL do ToDo App para abrir no navegador
+// URL HTTPS do ToDo App via nip.io (resolve direto para o IP do Load Balancer)
 output "app_url" {
-  description = "Endereço de acesso ao ToDo App"
-  value       = "http://${azurerm_public_ip.lb.ip_address}"
+  description = "Endereço HTTPS do ToDo App"
+  value       = "https://${azurerm_public_ip.lb.ip_address}.nip.io"
 }
 
 // IP interno da VM da aplicação

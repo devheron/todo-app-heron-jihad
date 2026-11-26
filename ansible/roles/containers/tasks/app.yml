@@ -59,25 +59,62 @@
     state: started
     restart_policy: always
     restart: "{{ app_nginx_conf.changed }}"
-    published_ports:
-      - "{{ app_http_port }}:80"
     networks:
       - name: "{{ app_network }}"
     volumes:
       - "{{ app_config_dir }}/nginx.conf:/etc/nginx/conf.d/default.conf:ro"
 
-- name: Verificar se o site responde na porta {{ app_http_port }}
+- name: Criar diretorio de configuracao do Caddy
+  ansible.builtin.file:
+    path: "{{ caddy_config_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Gerar Caddyfile (reverse proxy do Caddy para o frontend)
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ caddy_config_dir }}/Caddyfile"
+    mode: "0644"
+  register: caddy_conf
+
+- name: Criar/atualizar container do Caddy (HTTPS automatico via Let's Encrypt)
+  community.docker.docker_container:
+    name: todo-caddy
+    image: "{{ caddy_image }}:{{ caddy_tag }}"
+    state: started
+    restart_policy: always
+    restart: "{{ caddy_conf.changed }}"
+    published_ports:
+      - "{{ app_http_port }}:80"
+      - "{{ caddy_https_port }}:443"
+    networks:
+      - name: "{{ app_network }}"
+    volumes:
+      - "{{ caddy_config_dir }}/Caddyfile:/etc/caddy/Caddyfile:ro"
+      - "{{ caddy_data_volume }}:/data"
+
+- name: Verificar que o Caddy redireciona HTTP para HTTPS
   ansible.builtin.uri:
-    url: "http://localhost:{{ app_http_port }}/"
-    status_code: 200
-  register: app_site_check
+    url: "http://localhost/"
+    status_code: [301, 308]
+    follow_redirects: none
+  register: app_redirect_check
   retries: 10
   delay: 6
+  until: app_redirect_check.status in [301, 308]
+
+- name: Verificar o site em HTTPS ({{ caddy_domain }})
+  ansible.builtin.uri:
+    url: "https://{{ caddy_domain }}/"
+    status_code: 200
+  register: app_site_check
+  retries: 20
+  delay: 10
   until: app_site_check.status == 200
 
-- name: Verificar se a API responde e acessa o banco (/todos)
+- name: Verificar a API em HTTPS (/todos) com acesso ao MongoDB
   ansible.builtin.uri:
-    url: "http://localhost:{{ app_http_port }}/todos"
+    url: "https://{{ caddy_domain }}/todos"
     status_code: 200
   register: app_api_check
   retries: 10

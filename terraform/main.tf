@@ -73,6 +73,18 @@ resource "azurerm_network_security_group" "app" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+
+  security_rule {
+    name                       = "https"
+    priority                   = 115
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
 // NSG do banco: MongoDB só a partir da subnet da aplicação, resto bloqueado
@@ -295,6 +307,24 @@ resource "azurerm_network_interface_nat_rule_association" "http_app" {
   network_interface_id  = azurerm_network_interface.app.id
   ip_configuration_name = "ipconfig"
   nat_rule_id           = azurerm_lb_nat_rule.http_app.id
+}
+
+// HTTPS 443 do LB vai para a VM da aplicação (Caddy + Let's Encrypt via nip.io)
+resource "azurerm_lb_nat_rule" "https_app" {
+  name                           = "https-app"
+  resource_group_name            = azurerm_resource_group.rg.name
+  loadbalancer_id                = azurerm_lb.lb.id
+  protocol                       = "Tcp"
+  frontend_port                  = 443
+  backend_port                   = 443
+  frontend_ip_configuration_name = "frontend"
+}
+
+// Liga a regra HTTPS na placa de rede da VM da aplicação
+resource "azurerm_network_interface_nat_rule_association" "https_app" {
+  network_interface_id  = azurerm_network_interface.app.id
+  ip_configuration_name = "ipconfig"
+  nat_rule_id           = azurerm_lb_nat_rule.https_app.id
 }
 
 // SSH da VM da aplicação pela porta 2222 do LB

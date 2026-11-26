@@ -38,3 +38,13 @@ mongo_root_user: "{{ lookup('ansible.builtin.env', 'MONGO_ROOT_USERNAME') | defa
 mongo_root_password: "{{ lookup('ansible.builtin.env', 'MONGO_ROOT_PASSWORD') }}"
 mongo_volume: todo-mongo-data
 db_config_dir: /opt/todo-db
+# Caddy serve HTTPS na porta 443 e redireciona HTTP para HTTPS automaticamente
+# Pede o certificado TLS no Let's Encrypt via desafio HTTP-01 usando nip.io
+# (nip.io resolve qualquer IP como subdominio, sem precisar registrar dominio)
+caddy_image: caddy
+caddy_tag: "2.8"
+caddy_config_dir: /opt/todo-caddy
+caddy_data_volume: todo-caddy-data
+caddy_https_port: 443
+caddy_domain: "{{ hostvars[groups['app'][0]]['ansible_host'] }}.nip.io"
+tls_email: "devheron.contact@gmail.com"
