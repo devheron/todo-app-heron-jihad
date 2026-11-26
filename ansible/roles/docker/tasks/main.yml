@@ -1,0 +1,63 @@
+---
+# Role docker
+# Instala o Docker Engine pelo repositório oficial e garante o serviço ativo.
+# Idempotente: se o Docker já estiver instalado e configurado, nenhuma tarefa altera nada.
+
+- name: Instalar dependências do repositório do Docker
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    lock_timeout: 300
+
+- name: Criar diretório para as chaves de repositórios do apt
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Baixar a chave GPG oficial do Docker
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Adicionar o repositório oficial do Docker
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    content: >
+      deb [arch={{ docker_apt_arch }} signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+    mode: "0644"
+  register: docker_repo
+
+- name: Instalar Docker Engine e Docker Compose
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+    update_cache: "{{ docker_repo.changed }}"   # atualiza a lista só se o repositório acabou de ser adicionado
+    lock_timeout: 300
+
+- name: Garantir o serviço Docker iniciado e habilitado no boot
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Adicionar o usuário administrador ao grupo docker
+  ansible.builtin.user:
+    name: "{{ docker_admin_user }}"
+    groups: docker
+    append: true
+
+- name: Verificar versão do Docker instalada
+  ansible.builtin.command: docker --version
+  register: docker_version
+  changed_when: false
+
+- name: Exibir versão do Docker
+  ansible.builtin.debug:
+    msg: "{{ inventory_hostname }}: {{ docker_version.stdout }}"

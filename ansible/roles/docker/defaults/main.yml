@@ -1,0 +1,18 @@
+---
+# Valores padrão da role docker.
+
+# Usuário administrador da VM que poderá usar o Docker sem sudo
+# (o mesmo usuário que o Ansible usa para conectar: azureuser)
+docker_admin_user: "{{ ansible_user }}"
+
+# Arquitetura usada no repositório do Docker (as VMs da Azure são x86_64 = amd64)
+docker_apt_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+# Pacotes do Docker (conjunto recomendado pela documentação oficial)
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+  - python3-docker        # biblioteca usada pelo Ansible para gerenciar contêineres (role containers)
