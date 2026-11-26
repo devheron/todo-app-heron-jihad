@@ -1,18 +1,17 @@
 ---
-
-# ---- Ambiente ----
+# Ambiente
 env_name: dev 
 
-# ---- Imagens da aplicação (parâmetros docker_image / docker_tag da pipeline) ----
+# Imagens da aplicação
 docker_image: ghcr.io/devheron/todo-app-heron-jihad
 docker_tag: v1 
 force_pull: false 
 
-# ---- Sistema operacional (parâmetros update_os / extra_packages da pipeline) ----
+# Sistema operacional
 update_os: false
 extra_packages: ""
 
-# ---- Banco de dados (MongoDB) ----
+# Banco de dados (MongoDB)
 mongo_database: todo-app 
 mongo_app_user: todoapp 
 mongo_root_user: "{{ lookup('ansible.builtin.env', 'MONGO_ROOT_USERNAME') | default('admin', true) }}"

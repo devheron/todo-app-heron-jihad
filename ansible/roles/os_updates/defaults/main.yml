@@ -1,6 +1,4 @@
 ---
-# Valores padrão da role os_updates.
-# A pipeline sobrescreve com --extra-vars (prioridade máxima no Ansible).
 
 update_os: false            # true = aplica atualizações do sistema operacional
 reboot_if_required: true    # reinicia a VM só se a atualização exigir

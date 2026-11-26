@@ -1,8 +1,7 @@
 ---
-# Role containers
 # Cria e mantém os contêineres de cada VM:
 #   VM do banco     -> db.yml  (MongoDB)
-#   VM da aplicação -> app.yml (Nginx + frontend React e API Node.js)
+#   VM da aplicação -> app.yml
 
 - name: Configurar contêiner da VM do banco
   ansible.builtin.include_tasks: db.yml

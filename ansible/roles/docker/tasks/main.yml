@@ -1,5 +1,4 @@
 ---
-# Role docker
 # Instala o Docker Engine pelo repositório oficial e garante o serviço ativo.
 # Idempotente: se o Docker já estiver instalado e configurado, nenhuma tarefa altera nada.
 
@@ -38,7 +37,7 @@
   ansible.builtin.apt:
     name: "{{ docker_packages }}"
     state: present
-    update_cache: "{{ docker_repo.changed }}"   # atualiza a lista só se o repositório acabou de ser adicionado
+    update_cache: "{{ docker_repo.changed }}"
     lock_timeout: 300
 
 - name: Garantir o serviço Docker iniciado e habilitado no boot

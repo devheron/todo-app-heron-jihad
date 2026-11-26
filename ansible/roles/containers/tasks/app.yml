@@ -1,7 +1,4 @@
 ---
-# Contêineres da VM da aplicação (card 17)
-# - todo-backend : API Node.js/Express (porta 5000 só na rede interna do Docker)
-# - todo-frontend: Nginx servindo o React na porta 80 e encaminhando /todos para a API
 
 - name: Validar que a senha do banco foi informada pela pipeline
   ansible.builtin.assert:
@@ -53,7 +50,7 @@
       - name: "{{ app_network }}"
     env:
       MONGO_URI: "{{ mongo_uri }}"
-  no_log: true          # MONGO_URI contém a senha do banco: não exibir no log da pipeline
+  no_log: true
 
 - name: Criar/atualizar contêiner do frontend + Nginx (todo-frontend)
   community.docker.docker_container:
@@ -61,7 +58,7 @@
     image: "{{ app_frontend_image }}:{{ docker_tag }}"
     state: started
     restart_policy: always
-    restart: "{{ app_nginx_conf.changed }}"     # reinicia só se a configuração do Nginx mudou
+    restart: "{{ app_nginx_conf.changed }}"
     published_ports:
       - "{{ app_http_port }}:80"
     networks:

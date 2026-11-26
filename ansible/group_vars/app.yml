@@ -1,15 +1,15 @@
 ---
 
-# ---- Nginx (porta pública da aplicação) ----
+# Nginx
 app_http_port: 80 
 
-# ---- API Node.js/Express ----
+# API Node
 app_api_port: 5000  
 
-# ---- Docker ----
+# Docker 
 app_network: todo-net 
 app_config_dir: /opt/todo-app 
 
-# ---- Conexão com o banco (VM do banco, pela rede privada) ----
+# Conexão com o banco
 db_private_ip: "{{ hostvars[groups['db'][0]]['ansible_default_ipv4']['address'] }}"
-db_port: "{{ hostvars[groups['db'][0]]['mongo_port'] }}"   # mesma porta definida no db.yml
+db_port: "{{ hostvars[groups['db'][0]]['mongo_port'] }}"
