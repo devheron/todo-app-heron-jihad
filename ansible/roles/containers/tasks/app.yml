@@ -59,6 +59,7 @@
     state: started
     restart_policy: always
     restart: "{{ app_nginx_conf.changed }}"
+    published_ports: []
     networks:
       - name: "{{ app_network }}"
     volumes:
