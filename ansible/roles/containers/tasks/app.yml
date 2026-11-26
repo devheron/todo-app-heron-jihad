@@ -60,6 +60,8 @@
     restart_policy: always
     restart: "{{ app_nginx_conf.changed }}"
     published_ports: []
+    comparisons:
+      published_ports: strict
     networks:
       - name: "{{ app_network }}"
     volumes:
@@ -88,6 +90,8 @@
     published_ports:
       - "{{ app_http_port }}:80"
       - "{{ caddy_https_port }}:443"
+    comparisons:
+      published_ports: strict
     networks:
       - name: "{{ app_network }}"
     volumes:
