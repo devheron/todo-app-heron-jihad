@@ -1,0 +1,16 @@
+---
+# Variáveis da VM do banco (grupo "db").
+# Só a VM do banco recebe estes valores.
+
+# ---- MongoDB ----
+mongo_image: mongo
+mongo_tag: "7.0" 
+mongo_port: 27017
+
+# Bind address: a porta é publicada SOMENTE no IP privado da VM (nunca em 0.0.0.0),
+# então o banco só é acessível pela rede privada da Azure.
+mongo_bind_ip: "{{ ansible_default_ipv4.address }}"
+
+# ---- Persistência ----
+mongo_volume: todo-mongo-data
+db_config_dir: /opt/todo-db
