@@ -1,0 +1,31 @@
+---
+# Valores padrão da role containers.
+# Os valores reais por ambiente ficam no group_vars (cards 19/20) e nos parâmetros da pipeline.
+
+# ---- Imagens da aplicação (publicadas pela pipeline no GitHub Container Registry) ----
+# docker_image = prefixo das imagens; docker_tag = versão (parâmetros da pipeline)
+docker_image: ghcr.io/devheron/todo-app-heron-jihad
+docker_tag: v1
+force_pull: false                     # true = baixa a imagem de novo mesmo se a tag já existir na VM
+app_backend_image: "{{ docker_image }}-backend"
+app_frontend_image: "{{ docker_image }}-frontend"
+
+# ---- Login no registry (credenciais vêm da pipeline por variável de ambiente) ----
+registry_url: ghcr.io
+registry_username: "{{ lookup('ansible.builtin.env', 'REGISTRY_USERNAME') }}"
+registry_password: "{{ lookup('ansible.builtin.env', 'REGISTRY_PASSWORD') }}"
+
+# ---- Docker na VM da aplicação ----
+app_network: todo-net                 # rede interna onde o Nginx enxerga a API pelo nome
+app_config_dir: /opt/todo-app         # onde fica a configuração do Nginx na VM
+app_http_port: 80
+
+# ---- Conexão da API com o MongoDB (VM do banco, pela rede privada) ----
+mongo_database: todo-app
+mongo_app_user: todoapp
+mongo_app_password: "{{ lookup('ansible.builtin.env', 'MONGO_APP_PASSWORD') }}"
+db_private_ip: "{{ hostvars[groups['db'][0]]['ansible_default_ipv4']['address'] }}"
+# Senha codificada para uso em URL (caracteres especiais como @ : / não quebram a conexão)
+mongo_app_password_url: "{{ mongo_app_password | urlencode | replace('/', '%2F') }}"
+mongo_uri: >-
+  mongodb://{{ mongo_app_user }}:{{ mongo_app_password_url }}@{{ db_private_ip }}:27017/{{ mongo_database }}?authSource={{ mongo_database }}
