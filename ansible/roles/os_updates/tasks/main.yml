@@ -1,0 +1,57 @@
+---
+# Role os_updates
+# 1) Atualiza a lista de pacotes do apt (sempre, para conseguir instalar pacotes)
+# 2) Aplica atualizações do SO SOMENTE se update_os=true (parâmetro da pipeline)
+# 3) Instala pacotes base e pacotes extras informados na pipeline
+
+- name: Atualizar lista de pacotes do apt (apt update)
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 300
+  changed_when: false
+
+- name: Aplicar atualizações do sistema operacional (somente se update_os=true)
+  when: update_os | bool
+  block:
+    - name: Atualizar pacotes instalados (apt upgrade)
+      ansible.builtin.apt:
+        upgrade: safe
+        lock_timeout: 300
+
+    - name: Verificar se a atualização exige reinicialização
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: os_updates_reboot_flag
+
+    - name: Reiniciar a VM (somente se a atualização exigir)
+      ansible.builtin.reboot:
+        msg: "Reinicio solicitado pelo Ansible apos atualizacao do SO"
+        reboot_timeout: 600
+      when:
+        - reboot_if_required | bool
+        - os_updates_reboot_flag.stat.exists
+
+- name: Informar que as atualizações do SO foram puladas
+  ansible.builtin.debug:
+    msg: "update_os=false: atualizações do sistema operacional NÃO aplicadas nesta execução"
+  when: not (update_os | bool)
+
+- name: Instalar pacotes base
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+    lock_timeout: 300
+
+- name: Converter extra_packages em lista ("curl,git" -> [curl, git])
+  ansible.builtin.set_fact:
+    os_updates_extra_list: >-
+      {{ (extra_packages.split(',') if extra_packages is string else extra_packages)
+         | map('trim') | reject('equalto', '') | list }}
+
+- name: Instalar pacotes extras informados na pipeline
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+    lock_timeout: 300
+  loop: "{{ os_updates_extra_list }}"

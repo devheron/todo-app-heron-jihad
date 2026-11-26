@@ -1,0 +1,15 @@
+---
+# Valores padrão da role os_updates.
+# A pipeline sobrescreve com --extra-vars (prioridade máxima no Ansible).
+
+update_os: false            # true = aplica atualizações do sistema operacional
+reboot_if_required: true    # reinicia a VM só se a atualização exigir
+extra_packages: ""          # ex.: "curl,git,unzip" (texto vindo da pipeline) ou lista YAML
+
+# Pacotes que toda VM precisa (certificados, rede e utilitários básicos)
+base_packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - net-tools
+  - dnsutils
