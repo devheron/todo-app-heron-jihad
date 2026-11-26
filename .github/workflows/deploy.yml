@@ -1,0 +1,227 @@
+name: Deploy PM-04 ToDo App
+
+# Execução manual com os parâmetros do ambiente
+on:
+  workflow_dispatch:
+    inputs:
+      acao:
+        description: "deploy cria ou atualiza o ambiente, destroy remove tudo"
+        type: choice
+        options: [deploy, destroy]
+        default: deploy
+      environment:
+        description: "Ambiente de destino"
+        type: choice
+        options: [dev, homolog, prod]
+        default: dev
+      instance_name:
+        description: "Nome da VM da aplicação (a do banco recebe o sufixo -db)"
+        type: string
+        default: vm-pm04
+      instance_type:
+        description: "Tamanho da VM da aplicação"
+        type: string
+        default: Standard_D2als_v6
+      docker_image:
+        description: "Prefixo das imagens no GHCR"
+        type: string
+        default: ghcr.io/devheron/todo-app-heron-jihad
+      docker_tag:
+        description: "Versão das imagens (tag fixa, ex: v1)"
+        type: string
+        default: v1
+      build_images:
+        description: "Buildar e publicar as imagens com essa tag"
+        type: boolean
+        default: true
+      update_os:
+        description: "Aplicar atualizações do sistema operacional"
+        type: boolean
+        default: false
+      extra_packages:
+        description: "Pacotes extras separados por vírgula"
+        type: string
+        default: curl,git,unzip
+
+permissions:
+  contents: read
+  packages: write
+
+# Uma execução por ambiente de cada vez, protege o state
+concurrency:
+  group: pm04-${{ inputs.environment }}
+  cancel-in-progress: false
+
+# Credenciais da Azure e variáveis do Terraform, todas vindas de secrets e inputs
+env:
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+  TF_VAR_environment: ${{ inputs.environment }}
+  TF_VAR_instance_name: ${{ inputs.instance_name }}
+  TF_VAR_instance_type: ${{ inputs.instance_type }}
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  # Build das imagens do frontend e da API e publicação no GHCR
+  build:
+    name: Build das imagens
+    if: inputs.acao == 'deploy' && inputs.build_images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Preparar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login no GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e push da API
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ inputs.docker_image }}-backend:${{ inputs.docker_tag }}
+
+      - name: Build e push do frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ inputs.docker_image }}-frontend:${{ inputs.docker_tag }}
+
+  # Provisionamento da infraestrutura na Azure
+  terraform:
+    name: Terraform
+    needs: build
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    outputs:
+      inventory: ${{ steps.saida.outputs.inventory }}
+      app_url: ${{ steps.saida.outputs.app_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+
+      # Um state por ambiente, dev e prod nunca se sobrescrevem
+      - name: Terraform init
+        run: terraform init -input=false -backend-config="key=pm04-${TF_VAR_environment}.tfstate"
+
+      - name: Validar código
+        run: |
+          terraform fmt -check -recursive
+          terraform validate
+
+      - name: Terraform plan
+        if: inputs.acao == 'deploy'
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform apply
+        if: inputs.acao == 'deploy'
+        run: terraform apply -input=false tfplan
+
+      - name: Terraform destroy
+        if: inputs.acao == 'destroy'
+        run: terraform destroy -input=false -auto-approve
+
+      # Inventory do Ansible e URL saem dos outputs do Terraform
+      - name: Exportar inventory e URL
+        id: saida
+        if: inputs.acao == 'deploy'
+        run: |
+          echo "inventory=$(terraform output -raw ansible_inventory | base64 -w0)" >> "$GITHUB_OUTPUT"
+          echo "app_url=$(terraform output -raw app_url)" >> "$GITHUB_OUTPUT"
+          terraform output
+
+  # Configuração das VMs: SO, pacotes, Docker e contêineres
+  ansible:
+    name: Ansible
+    needs: terraform
+    if: ${{ !failure() && !cancelled() && inputs.acao == 'deploy' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ansible
+    env:
+      ANSIBLE_CONFIG: ${{ github.workspace }}/ansible/ansible.cfg
+      ANSIBLE_FORCE_COLOR: "1"
+      MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
+      MONGO_APP_PASSWORD: ${{ secrets.MONGO_APP_PASSWORD }}
+      INVENTORY_B64: ${{ needs.terraform.outputs.inventory }}
+      APP_URL: ${{ needs.terraform.outputs.app_url }}
+      ENV_NAME: ${{ inputs.environment }}
+      DOCKER_IMAGE: ${{ inputs.docker_image }}
+      DOCKER_TAG: ${{ inputs.docker_tag }}
+      UPDATE_OS: ${{ inputs.update_os }}
+      EXTRA_PACKAGES: ${{ inputs.extra_packages }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Instalar Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Instalar Ansible
+        run: |
+          pip install "ansible==10.*"
+          ansible --version
+
+      # Chave privada gravada só no runner, sem CRLF do Windows
+      - name: Configurar chave SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/pm04
+          chmod 600 ~/.ssh/pm04
+
+      - name: Gerar inventory a partir do Terraform
+        run: |
+          echo "$INVENTORY_B64" | base64 -d > inventory/hosts.yml
+          cat inventory/hosts.yml
+
+      # Parâmetros da pipeline viram extra-vars do Ansible
+      - name: Montar parâmetros do Ansible
+        run: |
+          jq -n \
+            --arg env_name "$ENV_NAME" \
+            --arg docker_image "$DOCKER_IMAGE" \
+            --arg docker_tag "$DOCKER_TAG" \
+            --arg update_os "$UPDATE_OS" \
+            --arg extra_packages "$EXTRA_PACKAGES" \
+            '{env_name: $env_name, docker_image: $docker_image, docker_tag: $docker_tag, update_os: $update_os, extra_packages: $extra_packages}' \
+            > /tmp/extra-vars.json
+          cat /tmp/extra-vars.json
+
+      - name: Validar playbook
+        run: ansible-playbook playbook.yml --syntax-check -e @/tmp/extra-vars.json
+
+      - name: Executar playbook
+        run: ansible-playbook playbook.yml -e @/tmp/extra-vars.json
+
+      - name: Resumo
+        run: |
+          echo "### ToDo App no ar" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ambiente: $ENV_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Imagens: $DOCKER_IMAGE-*:$DOCKER_TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: $APP_URL" >> "$GITHUB_STEP_SUMMARY"
