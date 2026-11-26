@@ -1,0 +1,46 @@
+---
+# Playbook principal do ToDo App: configura a VM do banco (MongoDB) e depois a VM da aplicação (Frontend + API)
+
+- name: ToDo App | Configurar VM do banco (MongoDB)
+  hosts: db
+  become: true
+  gather_facts: false
+
+  pre_tasks:
+    - name: Aguardar a VM do banco aceitar conexão SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Coletar informações do sistema da VM do banco
+      ansible.builtin.setup:
+
+    - name: Exibir parâmetros recebidos da pipeline
+      ansible.builtin.debug:
+        msg:
+          - "docker_image: {{ docker_image | default('nao informado') }}"
+          - "docker_tag: {{ docker_tag | default('nao informado') }}"
+          - "update_os: {{ update_os | default(false) }}"
+          - "extra_packages: {{ extra_packages | default('nenhum') }}"
+
+  roles:
+    - os_updates
+    - docker
+    - containers
+
+- name: ToDo App | Configurar VM da aplicação (Frontend + API)
+  hosts: app
+  become: true
+  gather_facts: false
+
+  pre_tasks:
+    - name: Aguardar a VM da aplicação aceitar conexão SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Coletar informações do sistema da VM da aplicação
+      ansible.builtin.setup:
+
+  roles:
+    - os_updates
+    - docker
+    - containers
