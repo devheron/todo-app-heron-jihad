@@ -1,5 +1,4 @@
 ---
-# Contêiner da VM do banco (card 18)
 # - todo-mongodb: MongoDB com autenticação, dados em volume persistente
 #   e porta 27017 publicada SOMENTE no IP privado da VM (nunca em 0.0.0.0)
 
@@ -30,9 +29,9 @@
     state: started
     restart_policy: always
     published_ports:
-      - "{{ ansible_default_ipv4.address }}:27017:27017"   # só no IP privado
+      - "{{ mongo_bind_ip }}:{{ mongo_port }}:27017" 
     volumes:
-      - "{{ mongo_volume }}:/data/db"                      # dados persistentes
+      - "{{ mongo_volume }}:/data/db" 
       - "{{ db_config_dir }}/initdb:/docker-entrypoint-initdb.d:ro"
     env:
       MONGO_INITDB_ROOT_USERNAME: "{{ mongo_root_user }}"
@@ -40,12 +39,12 @@
       MONGO_INITDB_DATABASE: "{{ mongo_database }}"
       MONGO_APP_USER: "{{ mongo_app_user }}"
       MONGO_APP_PASSWORD: "{{ mongo_app_password }}"
-  no_log: true          # as variáveis de ambiente contêm senhas: não exibir no log
+  no_log: true
 
 - name: Aguardar o MongoDB aceitar conexões no IP privado
   ansible.builtin.wait_for:
-    host: "{{ ansible_default_ipv4.address }}"
-    port: 27017
+    host: "{{ mongo_bind_ip }}"
+    port: "{{ mongo_port }}"
     timeout: 120
 
 - name: Verificar login com o usuário da aplicação
