@@ -8,3 +8,13 @@ data/
 *.log
 .DS_Store
 Thumbs.db
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+
+# Inventory gerado pelo output do Terraform
+ansible/inventory/hosts.yml
